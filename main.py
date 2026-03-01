@@ -4,9 +4,11 @@ import sys
 import arcade
 from arcade.gui import UIManager, UIAnchorLayout, UIBoxLayout, UIFlatButton
 from pyglet.graphics import Batch
+from arcade.particles import FadeParticle, Emitter, EmitInterval
+import random
 
 # Окно и цвета
-SCREEN_WIDTH, SCREEN_HEIGHT = 1366, 768
+SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
 SCREEN_TITLE = "Clover sim"
 
 GRAVITY = 35 # 35
@@ -61,6 +63,31 @@ BUTTON_STYLE = {
 
 SILVER_TIME = 180
 GOLD_TIME = 120
+
+PUFF_TEX = arcade.make_soft_circle_texture(17, arcade.color.LIGHT_YELLOW, 255, 50)
+
+
+# Мутаторы (каждый кадр чуть-чуть меняют частицу)
+def gravity_drag(p):  # Для искр: чуть вниз и затухание скорости
+    p.change_y += -0.07
+    p.change_x *= 0.97
+    p.change_y *= 0.99
+
+def make_fountain(x, y):
+    # Фонтанчик: равномерный «дождик» вверх, бесконечно
+    return Emitter(
+        center_xy=(x, y),
+        emit_controller=EmitInterval(0.015),  # Непрерывный поток
+        particle_factory=lambda e: FadeParticle(
+            filename_or_texture=PUFF_TEX,
+            change_xy=(random.uniform(-6, 6), random.uniform(4.0, 6.0)),
+            center_xy=(random.uniform(-30, 30), 0),
+            lifetime=random.uniform(1.7, 2.5),
+            start_alpha=240, end_alpha=0,
+            scale=random.uniform(0.4, 0.8),
+            mutation_callback=gravity_drag,
+        ),
+    )
 
 
 class MenuView(arcade.View):
@@ -119,19 +146,11 @@ class GameView(arcade.View):
         self.bounce_sound = arcade.load_sound("sounds/bounce.wav")
 
         self.player_list = arcade.SpriteList()
-        # points = [
-        #     (-48, 30),
-        #     (47, 30),
-        #     (47, 3),
-        #     (22, -30),
-        #     (-22, -30),
-        #     (-48, 3)
-        # ]
-        self.player = arcade.Sprite("images/player.png", center_x=96, center_y=98)
+        self.player = arcade.Sprite("images/player.png", center_x=96, center_y=100)
         self.player_list.append(self.player)
 
         self.ball_list = arcade.SpriteList()
-        self.ball = arcade.Sprite("images/ball.png", center_x=96, center_y=50)
+        self.ball = arcade.Sprite("images/ball.png", center_x=96, center_y=100)
         self.ball_list.append(self.ball)
         self.ball_grabbed = False
 
@@ -156,7 +175,7 @@ class GameView(arcade.View):
 
         self.batch = Batch()
         self.text_arm = arcade.Text(f"DISARMED",
-                                     16, 16, arcade.color.RED, 20, batch=self.batch)
+                                     16, 1050, arcade.color.RED, 20, batch=self.batch)
         self.text_timer = arcade.Text(f"00:00.00",
                                     16, 16, arcade.color.WHITE, 20, batch=self.batch)
 
@@ -223,7 +242,7 @@ class GameView(arcade.View):
         if (not self.prev_btn_3 and not self.ball_grabbed and self.joystick.buttons[3] and
                 (not arcade.check_for_collision_with_list(self.player, self.no_ball)) and
                 ((self.player.center_x - self.ball.center_x) ** 2 + (self.player.center_y - self.ball.center_y) ** 2) ** 0.5 < GRAB_RADIUS):
-            if not self.started:
+            if not self.started and not self.ended:
                 self.started = True
             self.ball_grabbed = True
             for i in self.with_ball:
@@ -284,8 +303,8 @@ class GameView(arcade.View):
                     self.ball.change_y = 0
                     self.ball.center_y -= self.ball.change_y
 
-        self.camera.position = (max(SCREEN_WIDTH // 2, min(self.player.center_x, 12000 - SCREEN_WIDTH // 2)),
-                                max(SCREEN_HEIGHT // 2, min(self.player.center_y, 4800 - SCREEN_HEIGHT // 2)))
+        self.camera.position = (max(SCREEN_WIDTH // 2, min(int(self.player.center_x), 12000 - SCREEN_WIDTH // 2)),
+                                max(SCREEN_HEIGHT // 2, min(int(self.player.center_y), 4800 - SCREEN_HEIGHT // 2)))
 
         if self.started:
             self.timer += dt
@@ -312,7 +331,7 @@ class GameView(arcade.View):
 
     def on_draw(self) -> None:
         self.clear()
-        arcade.draw_texture_rect(self.bg, arcade.rect.XYWH((max(SCREEN_WIDTH // 2, min(self.player.center_x, 12000 - SCREEN_WIDTH // 2))  - 6000) * ((self.bg.width * (SCREEN_HEIGHT / self.bg.height) // 2 - SCREEN_WIDTH // 2) / (SCREEN_WIDTH // 2 - 6000)) + SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, self.bg.width * (SCREEN_HEIGHT / self.bg.height), SCREEN_HEIGHT))
+        arcade.draw_texture_rect(self.bg, arcade.rect.XYWH((max(SCREEN_WIDTH // 2, min(int(self.player.center_x), 12000 - SCREEN_WIDTH // 2))  - 6000) * ((self.bg.width * (SCREEN_HEIGHT / self.bg.height) // 2 - SCREEN_WIDTH // 2) / (SCREEN_WIDTH // 2 - 6000)) + SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, self.bg.width * (SCREEN_HEIGHT / self.bg.height), SCREEN_HEIGHT))
 
         self.camera.use()
         self.walls.draw()
@@ -325,6 +344,12 @@ class GameView(arcade.View):
     def on_key_press(self, key: int, modifiers: int) -> None:
         if key == arcade.key.ESCAPE:
             self.window.show_view(self.pause_view)
+
+    def on_show_view(self):
+        joysticks = arcade.get_joysticks()
+        self.joystick = joysticks[0] if joysticks else None
+        if self.joystick:
+            self.joystick.open()
 
 
 class PauseView(arcade.View):
@@ -370,7 +395,8 @@ class PauseView(arcade.View):
         self.window.show_view(game_view)
 
     def main_menu(self, _=None) -> None:
-        self.window.show_view(self.menu_view)
+        menu_view = MenuView()
+        self.window.show_view(menu_view)
 
 
 class EndView(arcade.View):
@@ -379,12 +405,21 @@ class EndView(arcade.View):
 
         self.menu_view = menu_view
 
+        self.gold_cup = arcade.load_texture("images/cup_gold.png")
+        self.silver_cup = arcade.load_texture("images/cup_silver.png")
+        self.bronze_cup = arcade.load_texture("images/cup_bronze.png")
+
+        self.fountain = None
+
         if time <= GOLD_TIME:
-            self.trophy_texture = arcade.load_texture("images/cup_gold.png")
+            self.trophy_texture = self.gold_cup
+            self.fountain = make_fountain(SCREEN_WIDTH // 2, SCREEN_HEIGHT * 0.7 + 100)
         elif time <= SILVER_TIME:
-            self.trophy_texture = arcade.load_texture("images/cup_silver.png")
+            self.trophy_texture = self.silver_cup
         else:
-            self.trophy_texture = arcade.load_texture("images/cup_bronze.png")
+            self.trophy_texture = self.bronze_cup
+
+        self.time = time
 
         self.manager = UIManager()
         self.manager.enable()  # Включить, чтоб виджеты работали
@@ -406,8 +441,19 @@ class EndView(arcade.View):
     def on_draw(self) -> bool | None:
         self.clear()
         arcade.draw_lbwh_rectangle_filled(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, arcade.color.AERO_BLUE)
+        if self.fountain:
+            self.fountain.draw()
         arcade.draw_texture_rect(self.trophy_texture, arcade.rect.XYWH(SCREEN_WIDTH // 2, SCREEN_HEIGHT * 0.7, self.trophy_texture.width, self.trophy_texture.height))
+        arcade.draw_lbwh_rectangle_filled(SCREEN_WIDTH // 2 - 205, SCREEN_HEIGHT // 2 - 100, 410, 40, color=arcade.color.WHITE)
+        arcade.draw_lbwh_rectangle_filled(SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 - 95, min((400 * GOLD_TIME) / self.time, 400), 30, color=arcade.color.GREEN)
+        arcade.draw_texture_rect(self.gold_cup, arcade.rect.XYWH(SCREEN_WIDTH // 2 + 200, SCREEN_HEIGHT // 2 - 120, 30, 30))
+        arcade.draw_texture_rect(self.bronze_cup, arcade.rect.XYWH(SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 - 120, 30, 30))
+        arcade.draw_texture_rect(self.silver_cup, arcade.rect.XYWH(SCREEN_WIDTH // 2 - 200 + (400 * GOLD_TIME // SILVER_TIME), SCREEN_HEIGHT // 2 - 120, 30, 30))
         self.manager.draw()
+
+    def on_update(self, dt: float) -> bool | None:
+        if self.fountain:
+            self.fountain.update(dt)
 
     def main_menu(self, _=None) -> None:
         self.menu_view.game_view = GameView(self.menu_view)
