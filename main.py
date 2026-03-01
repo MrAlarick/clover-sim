@@ -331,7 +331,13 @@ class GameView(arcade.View):
 
     def on_draw(self) -> None:
         self.clear()
-        arcade.draw_texture_rect(self.bg, arcade.rect.XYWH((max(SCREEN_WIDTH // 2, min(int(self.player.center_x), 12000 - SCREEN_WIDTH // 2))  - 6000) * ((self.bg.width * (SCREEN_HEIGHT / self.bg.height) // 2 - SCREEN_WIDTH // 2) / (SCREEN_WIDTH // 2 - 6000)) + SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, self.bg.width * (SCREEN_HEIGHT / self.bg.height), SCREEN_HEIGHT))
+        arcade.draw_texture_rect(self.bg, arcade.rect.XYWH((max(SCREEN_WIDTH // 2,
+                                                                min(int(self.player.center_x),
+                                                                    12000 - SCREEN_WIDTH // 2))  - 6000) * ((self.bg.width * (SCREEN_HEIGHT / self.bg.height)
+                                                                                                             // 2 - SCREEN_WIDTH // 2) / (SCREEN_WIDTH // 2 - 6000)) + SCREEN_WIDTH // 2,
+                                                           SCREEN_HEIGHT // 2,
+                                                           self.bg.width * (SCREEN_HEIGHT / self.bg.height),
+                                                           SCREEN_HEIGHT))
 
         self.camera.use()
         self.walls.draw()
@@ -443,12 +449,31 @@ class EndView(arcade.View):
         arcade.draw_lbwh_rectangle_filled(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, arcade.color.AERO_BLUE)
         if self.fountain:
             self.fountain.draw()
-        arcade.draw_texture_rect(self.trophy_texture, arcade.rect.XYWH(SCREEN_WIDTH // 2, SCREEN_HEIGHT * 0.7, self.trophy_texture.width, self.trophy_texture.height))
-        arcade.draw_lbwh_rectangle_filled(SCREEN_WIDTH // 2 - 205, SCREEN_HEIGHT // 2 - 100, 410, 40, color=arcade.color.WHITE)
-        arcade.draw_lbwh_rectangle_filled(SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 - 95, min((400 * GOLD_TIME) / self.time, 400), 30, color=arcade.color.GREEN)
-        arcade.draw_texture_rect(self.gold_cup, arcade.rect.XYWH(SCREEN_WIDTH // 2 + 200, SCREEN_HEIGHT // 2 - 120, 30, 30))
-        arcade.draw_texture_rect(self.bronze_cup, arcade.rect.XYWH(SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 - 120, 30, 30))
-        arcade.draw_texture_rect(self.silver_cup, arcade.rect.XYWH(SCREEN_WIDTH // 2 - 200 + (400 * GOLD_TIME // SILVER_TIME), SCREEN_HEIGHT // 2 - 120, 30, 30))
+        arcade.draw_texture_rect(self.trophy_texture, arcade.rect.XYWH(SCREEN_WIDTH // 2,
+                                                                       SCREEN_HEIGHT * 0.7,
+                                                                       self.trophy_texture.width,
+                                                                       self.trophy_texture.height))
+        arcade.draw_lbwh_rectangle_filled(SCREEN_WIDTH // 2 - 205,
+                                          SCREEN_HEIGHT // 2 - 100,
+                                          410,
+                                          40,
+                                          color=arcade.color.WHITE)
+        arcade.draw_lbwh_rectangle_filled(SCREEN_WIDTH // 2 - 200,
+                                          SCREEN_HEIGHT // 2 - 95,
+                                          min((400 * GOLD_TIME) / self.time, 400),
+                                          30,
+                                          color=arcade.color.GREEN)
+        arcade.draw_texture_rect(self.gold_cup, arcade.rect.XYWH(SCREEN_WIDTH // 2 + 200,
+                                                                 SCREEN_HEIGHT // 2 - 120,
+                                                                 30,
+                                                                 30))
+        arcade.draw_texture_rect(self.bronze_cup, arcade.rect.XYWH(SCREEN_WIDTH // 2 - 200,
+                                                                   SCREEN_HEIGHT // 2 - 120,
+                                                                   30,
+                                                                   30))
+        arcade.draw_texture_rect(self.silver_cup,
+                                 arcade.rect.XYWH(SCREEN_WIDTH // 2 - 200 + (400 * GOLD_TIME // SILVER_TIME),
+                                                  SCREEN_HEIGHT // 2 - 120, 30, 30))
         self.manager.draw()
 
     def on_update(self, dt: float) -> bool | None:
