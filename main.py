@@ -125,6 +125,38 @@ class MenuView(arcade.View):
         sys.exit()
 
 
+class Player(arcade.Sprite):
+    def __init__(self):
+        super().__init__("images/player.png", center_x=96, center_y=100)
+        self.grounded = False
+
+    def update(self, dt: float = 1 / 60, *args, **kwargs) -> None:
+        self.change_angle += kwargs["roll"]
+        self.change_angle *= ANG_AIR_DRAG
+        self.angle += self.change_angle * dt
+        self.angle = self.angle % 360
+
+        angle = math.radians(self.angle)
+        self.change_x += math.sin(angle) * kwargs["acceleration"] * dt
+        self.change_y += math.cos(angle) * kwargs["acceleration"] * dt
+        self.change_y -= GRAVITY * dt
+        self.change_x -= LIN_AIR_DRAG * self.change_x * dt
+        self.change_y -= LIN_AIR_DRAG * self.change_y * dt
+        if self.grounded:
+            self.change_x -= GROUND_FRICTION * self.change_x * dt
+            self.change_y -= GROUND_FRICTION * self.change_y * dt
+
+
+class Ball(arcade.Sprite):
+    def __init__(self):
+        super().__init__("images/ball.png", center_x=96, center_y=100)
+
+    def update(self, dt: float = 1 / 60, *args, **kwargs) -> None:
+        self.change_y -= GRAVITY * dt
+        self.change_x -= LIN_AIR_DRAG * self.change_x * dt
+        self.change_y -= LIN_AIR_DRAG * self.change_y * dt
+
+
 class GameView(arcade.View):
     def __init__(self, menu_view: MenuView):
         super().__init__()
@@ -146,11 +178,11 @@ class GameView(arcade.View):
         self.bounce_sound = arcade.load_sound("sounds/bounce.wav")
 
         self.player_list = arcade.SpriteList()
-        self.player = arcade.Sprite("images/player.png", center_x=96, center_y=100)
+        self.player = Player()
         self.player_list.append(self.player)
 
         self.ball_list = arcade.SpriteList()
-        self.ball = arcade.Sprite("images/ball.png", center_x=96, center_y=100)
+        self.ball = Ball()
         self.ball_list.append(self.ball)
         self.ball_grabbed = False
 
@@ -214,28 +246,13 @@ class GameView(arcade.View):
             self.fly_sound_plyer.volume = 0
             self.text_arm.text = "DISARMED"
 
-        self.player.change_angle += roll
-        self.player.change_angle *= ANG_AIR_DRAG
-        self.player.angle += self.player.change_angle * dt
-        self.player.angle = self.player.angle % 360
-
-
-
-        angle = math.radians(self.player.angle)
-        self.player.change_x += math.sin(angle) * acceleration * dt
-        self.player.change_y += math.cos(angle) * acceleration * dt
-        self.player.change_y -= GRAVITY * dt
-        self.player.change_x -= LIN_AIR_DRAG * self.player.change_x * dt
-        self.player.change_y -= LIN_AIR_DRAG * self.player.change_y * dt
-        if self.grounded:
-            self.player.change_x -= GROUND_FRICTION * self.player.change_x * dt
-            self.player.change_y -= GROUND_FRICTION * self.player.change_y * dt
+        self.player.update(acceleration=acceleration, roll=roll)
 
         self.player.center_y += self.player.change_y -1
         if arcade.check_for_collision_with_list(self.player, self.player_collision):
-            self.grounded = True
+            self.player.grounded = True
         else:
-            self.grounded = False
+            self.player.grounded = False
         self.player.center_y -= self.player.change_y -1
 
 
@@ -266,12 +283,10 @@ class GameView(arcade.View):
         self.physics_engine.update()
 
         if self.ball_grabbed:
-            self.ball.center_x = self.player.center_x - math.sin(angle) * 24
-            self.ball.center_y = self.player.center_y - math.cos(angle) * 24
+            self.ball.center_x = self.player.center_x - math.sin(math.radians(self.player.angle)) * 24
+            self.ball.center_y = self.player.center_y - math.cos(math.radians(self.player.angle)) * 24
         else:
-            self.ball.change_y -= GRAVITY * dt
-            self.ball.change_x -= LIN_AIR_DRAG * self.ball.change_x * dt
-            self.ball.change_y -= LIN_AIR_DRAG * self.ball.change_y * dt
+            self.ball.update()
 
             if arcade.check_for_collision_with_list(self.ball, self.slow_ball):
                 self.ball.change_x *= BALL_SLOW
@@ -331,10 +346,11 @@ class GameView(arcade.View):
 
     def on_draw(self) -> None:
         self.clear()
-        arcade.draw_texture_rect(self.bg, arcade.rect.XYWH((max(SCREEN_WIDTH // 2,
-                                                                min(int(self.player.center_x),
-                                                                    12000 - SCREEN_WIDTH // 2))  - 6000) * ((self.bg.width * (SCREEN_HEIGHT / self.bg.height)
-                                                                                                             // 2 - SCREEN_WIDTH // 2) / (SCREEN_WIDTH // 2 - 6000)) + SCREEN_WIDTH // 2,
+        sw = SCREEN_WIDTH // 2
+        x = max(sw, min(int(self.player.center_x), 12000 - sw))
+        scale = (self.bg.width * (SCREEN_HEIGHT / self.bg.height) // 2 - sw) / (sw - 6000)
+        background_x = (x - 6000) * scale + sw
+        arcade.draw_texture_rect(self.bg, arcade.rect.XYWH(background_x,
                                                            SCREEN_HEIGHT // 2,
                                                            self.bg.width * (SCREEN_HEIGHT / self.bg.height),
                                                            SCREEN_HEIGHT))
