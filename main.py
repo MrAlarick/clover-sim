@@ -226,36 +226,35 @@ class GameView(arcade.View):
         self.started = False
         self.ended = False
         self.end_timer = 0
+        self.acceleration = 0
+        self.roll = 0
 
-
-    # Логика
-    def on_update(self, dt: float) -> None:
+    def update_input(self):
         if self.joystick.buttons[7] and not self.prev_btn_7:
             self.armed = not self.armed
         self.prev_btn_7 = self.joystick.buttons[7]
         if self.armed:
             acc_axis = (-self.joystick.y + 1) / 2
-            acceleration = acc_axis * THRUST
+            self.acceleration = acc_axis * THRUST
             roll_axis = self.joystick.x
-            roll = roll_axis * ANG_THRUST
+            self.roll = roll_axis * ANG_THRUST
             self.fly_sound_plyer.volume = max(0.1, min(acc_axis + abs(roll_axis), 0.7))
             self.text_arm.text = ""
         else:
-            acceleration = 0
-            roll = 0
+            self.acceleration = 0
+            self.roll = 0
             self.fly_sound_plyer.volume = 0
             self.text_arm.text = "DISARMED"
 
-        self.player.update(acceleration=acceleration, roll=roll)
-
-        self.player.center_y += self.player.change_y -1
+    def update_player_grounded(self):
+        self.player.center_y += self.player.change_y - 1
         if arcade.check_for_collision_with_list(self.player, self.player_collision):
             self.player.grounded = True
         else:
             self.player.grounded = False
-        self.player.center_y -= self.player.change_y -1
+        self.player.center_y -= self.player.change_y - 1
 
-
+    def update_ball_grabbed(self):
         if (not self.prev_btn_3 and not self.ball_grabbed and self.joystick.buttons[3] and
                 (not arcade.check_for_collision_with_list(self.player, self.no_ball)) and
                 ((self.player.center_x - self.ball.center_x) ** 2 + (self.player.center_y - self.ball.center_y) ** 2) ** 0.5 < GRAB_RADIUS):
@@ -280,6 +279,47 @@ class GameView(arcade.View):
             self.ball.change_y = self.player.change_y
         self.prev_btn_3 = self.joystick.buttons[3]
 
+    def update_ball_collision(self):
+        if arcade.check_for_collision_with_list(self.ball, self.slow_ball):
+            self.ball.change_x *= BALL_SLOW
+            self.ball.change_y *= BALL_SLOW
+
+        self.ball.center_x += self.ball.change_x
+        if arcade.check_for_collision_with_list(self.ball, self.ball_collision):
+            volume = min(abs(self.ball.change_x) * 0.01, 1)
+            if volume > 0.035:
+                arcade.play_sound(self.bounce_sound, volume=volume)
+            self.ball.center_x -= self.ball.change_x
+            self.ball.change_x = -self.ball.change_x * BALL_ELASTICITY
+            self.ball.center_x += self.ball.change_x
+            if arcade.check_for_collision_with_list(self.ball, self.ball_collision):
+                self.ball.change_x = 0
+                self.ball.center_x -= self.ball.change_x
+
+        self.ball.center_y += self.ball.change_y
+        if arcade.check_for_collision_with_list(self.ball, self.ball_collision):
+            volume = min(abs(self.ball.change_y) * 0.05, 1)
+            if volume > 0.035:
+                arcade.play_sound(self.bounce_sound, volume=volume)
+            self.ball.center_y -= self.ball.change_y
+            self.ball.change_y = -self.ball.change_y * BALL_ELASTICITY
+            if abs(self.ball.change_y) < BALL_STOP_BOUNCE:
+                self.ball.change_y = 0
+            self.ball.center_y += self.ball.change_y
+            if arcade.check_for_collision_with_list(self.ball, self.ball_collision):
+                self.ball.change_y = 0
+                self.ball.center_y -= self.ball.change_y
+
+    # Логика
+    def on_update(self, dt: float) -> None:
+        self.update_input()
+
+        self.player.update(acceleration=self.acceleration, roll=self.roll)
+
+        self.update_player_grounded()
+
+        self.update_ball_grabbed()
+
         self.physics_engine.update()
 
         if self.ball_grabbed:
@@ -288,35 +328,7 @@ class GameView(arcade.View):
         else:
             self.ball.update()
 
-            if arcade.check_for_collision_with_list(self.ball, self.slow_ball):
-                self.ball.change_x *= BALL_SLOW
-                self.ball.change_y *= BALL_SLOW
-
-            self.ball.center_x += self.ball.change_x
-            if arcade.check_for_collision_with_list(self.ball, self.ball_collision):
-                volume = min(abs(self.ball.change_x) * 0.01, 1)
-                if volume > 0.035:
-                    arcade.play_sound(self.bounce_sound, volume=volume)
-                self.ball.center_x -= self.ball.change_x
-                self.ball.change_x = -self.ball.change_x * BALL_ELASTICITY
-                self.ball.center_x += self.ball.change_x
-                if arcade.check_for_collision_with_list(self.ball, self.ball_collision):
-                    self.ball.change_x = 0
-                    self.ball.center_x -= self.ball.change_x
-
-            self.ball.center_y += self.ball.change_y
-            if arcade.check_for_collision_with_list(self.ball, self.ball_collision):
-                volume = min(abs(self.ball.change_y) * 0.05, 1)
-                if volume > 0.035:
-                    arcade.play_sound(self.bounce_sound, volume=volume)
-                self.ball.center_y -= self.ball.change_y
-                self.ball.change_y = -self.ball.change_y * BALL_ELASTICITY
-                if abs(self.ball.change_y) < BALL_STOP_BOUNCE:
-                    self.ball.change_y = 0
-                self.ball.center_y += self.ball.change_y
-                if arcade.check_for_collision_with_list(self.ball, self.ball_collision):
-                    self.ball.change_y = 0
-                    self.ball.center_y -= self.ball.change_y
+            self.update_ball_collision()
 
         self.camera.position = (max(SCREEN_WIDTH // 2, min(int(self.player.center_x), 12000 - SCREEN_WIDTH // 2)),
                                 max(SCREEN_HEIGHT // 2, min(int(self.player.center_y), 4800 - SCREEN_HEIGHT // 2)))
@@ -343,6 +355,7 @@ class GameView(arcade.View):
             if self.end_timer > 3:
                 end_view = EndView(self.menu_view, self.timer)
                 self.window.show_view(end_view)
+        self.walls.update_animation(dt)
 
     def on_draw(self) -> None:
         self.clear()

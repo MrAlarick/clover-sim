@@ -85,6 +85,14 @@
    </object>
   </objectgroup>
  </tile>
+ <tile id="135">
+  <animation>
+   <frame tileid="135" duration="400"/>
+   <frame tileid="119" duration="300"/>
+   <frame tileid="135" duration="400"/>
+   <frame tileid="103" duration="300"/>
+  </animation>
+ </tile>
  <tile id="192">
   <objectgroup draworder="index" id="2">
    <object id="1" x="0" y="24">
