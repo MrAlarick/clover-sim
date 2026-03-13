@@ -2,10 +2,11 @@ import math
 import sys
 
 import arcade
-from arcade.gui import UIManager, UIAnchorLayout, UIBoxLayout, UIFlatButton
+from arcade.gui import UIManager, UIAnchorLayout, UIBoxLayout, UIFlatButton, UIInputText, UILabel
 from pyglet.graphics import Batch
 from arcade.particles import FadeParticle, Emitter, EmitInterval
 import random
+from csv import reader, writer
 
 # Окно и цвета
 SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
@@ -90,6 +91,21 @@ def make_fountain(x, y):
     )
 
 
+def seconds_to_str(s: float):
+    minutes = str(int(s) // 60)
+    if len(minutes) == 0:
+        minutes = "00"
+    elif len(minutes) == 1:
+        minutes = "0" + minutes
+    seconds = int(s) % 60
+    if seconds == 0:
+        seconds = "00"
+    elif seconds < 10:
+        seconds = "0" + str(seconds)
+    ms = str(round(s % 1, 3))[2:]
+    return f"{minutes}:{seconds}.{ms}"
+
+
 class MenuView(arcade.View):
     def __init__(self):
         super().__init__()
@@ -108,21 +124,35 @@ class MenuView(arcade.View):
         flat_button.on_click = self.start  # Не только лямбду, конечно
         self.box_layout.add(flat_button)
         flat_button = UIFlatButton(text="Выйти", width=400, height=50, style=BUTTON_STYLE)
-        flat_button.on_click = self.exit  # Не только лямбду, конечно
+        flat_button.on_click = lambda _: sys.exit()  # Не только лямбду, конечно
         self.box_layout.add(flat_button)
+        input_name = UIInputText(x=0, y=0, width=400, height=30)
+        input_name.on_change = self.update_name
+        self.box_layout.add(input_name)
+        self.error_label = UILabel(font_size=20,
+                        text_color=arcade.color.RED,
+                        width=300,
+                        align="center")
+        self.box_layout.add(self.error_label)
 
         self.anchor_layout.add(self.box_layout)  # Box в anchor
         self.manager.add(self.anchor_layout)  # Всё в manager
+        self.name = ""
 
     def on_draw(self) -> None:
         self.clear()
         self.manager.draw()
 
     def start(self, _=None) -> None:
-        self.window.show_view(self.game_view)  # Переключаем
+        if self.name:
+            self.game_view.name = self.name
+            self.error_label.text = ""
+            self.window.show_view(self.game_view)  # Переключаем
+        else:
+            self.error_label.text = "Введите имя"
 
-    def exit(self, _=None) -> None:
-        sys.exit()
+    def update_name(self, event):
+        self.name = event.new_value
 
 
 class Player(arcade.Sprite):
@@ -186,7 +216,7 @@ class GameView(arcade.View):
         self.ball_list.append(self.ball)
         self.ball_grabbed = False
 
-        tile_map = arcade.load_tilemap("levels/untitled.tmx", scaling=1)
+        tile_map = arcade.load_tilemap("levels/untitled.tmx", scaling=1, use_spatial_hash=True)
         self.walls = tile_map.sprite_lists["walls"]
         ball_solid = tile_map.sprite_lists["ball_solid"]
         only_ball = tile_map.sprite_lists["only_ball"]
@@ -216,7 +246,7 @@ class GameView(arcade.View):
 
         self.bg = arcade.load_texture("images/bg.jpeg")
 
-        self.fly_sound_plyer = arcade.play_sound(self.fly_sound, volume=0, loop=True)
+        self.fly_sound_player = arcade.play_sound(self.fly_sound, volume=0, loop=True)
 
         self.grounded = False
         self.prev_btn_3 = False
@@ -228,6 +258,7 @@ class GameView(arcade.View):
         self.end_timer = 0
         self.acceleration = 0
         self.roll = 0
+        self.name = ""
 
     def update_input(self):
         if self.joystick.buttons[7] and not self.prev_btn_7:
@@ -238,12 +269,12 @@ class GameView(arcade.View):
             self.acceleration = acc_axis * THRUST
             roll_axis = self.joystick.x
             self.roll = roll_axis * ANG_THRUST
-            self.fly_sound_plyer.volume = max(0.1, min(acc_axis + abs(roll_axis), 0.7))
+            self.fly_sound_player.volume = max(0.1, min(acc_axis + abs(roll_axis), 0.7))
             self.text_arm.text = ""
         else:
             self.acceleration = 0
             self.roll = 0
-            self.fly_sound_plyer.volume = 0
+            self.fly_sound_player.volume = 0
             self.text_arm.text = "DISARMED"
 
     def update_player_grounded(self):
@@ -353,8 +384,9 @@ class GameView(arcade.View):
         if self.ended:
             self.end_timer += dt
             if self.end_timer > 3:
-                end_view = EndView(self.menu_view, self.timer)
+                end_view = EndView(self.menu_view, self.timer, self.name)
                 self.window.show_view(end_view)
+
         self.walls.update_animation(dt)
 
     def on_draw(self) -> None:
@@ -381,10 +413,15 @@ class GameView(arcade.View):
             self.window.show_view(self.pause_view)
 
     def on_show_view(self):
+        self.fly_sound_player = arcade.play_sound(self.fly_sound, volume=0, loop=True)
         joysticks = arcade.get_joysticks()
         self.joystick = joysticks[0] if joysticks else None
         if self.joystick:
             self.joystick.open()
+
+    def on_hide_view(self) -> None:
+        if self.fly_sound_player:
+            arcade.stop_sound(self.fly_sound_player)
 
 
 class PauseView(arcade.View):
@@ -435,10 +472,11 @@ class PauseView(arcade.View):
 
 
 class EndView(arcade.View):
-    def __init__(self, menu_view: MenuView, time: float) -> None:
+    def __init__(self, menu_view: MenuView, time: float, name: str) -> None:
         super().__init__()
 
         self.menu_view = menu_view
+        self.name = name
 
         self.gold_cup = arcade.load_texture("images/cup_gold.png")
         self.silver_cup = arcade.load_texture("images/cup_silver.png")
@@ -454,6 +492,40 @@ class EndView(arcade.View):
         else:
             self.trophy_texture = self.bronze_cup
 
+        score = [name, str(time)]
+
+        with open("scores.csv", "a+", newline="") as f:
+            f.seek(0)
+            scores = list(reader(f))
+
+        print(scores)
+
+        scores.append(score)
+        print(scores)
+        scores.sort(key=lambda x: float(x[1]))
+
+        print(scores)
+
+        with open("scores.csv", "w") as f:
+            w = writer(f)
+            w.writerows(scores)
+
+        top_scores = []
+        f = False
+        for i in range(len(scores)):
+            if scores[i] == score:
+                f = True
+                top_scores.append([i, *scores[i]])
+            else:
+                if len(top_scores) < 3:
+                    top_scores.append([i, *scores[i]])
+                elif f:
+                    top_scores.append([i, *scores[i]])
+            if len(top_scores) == 4:
+                break
+
+        top_scores_string = "\n".join([f"{i[0] + 1}) {i[1]}: {seconds_to_str(float(i[2]))}" for i in top_scores])
+
         self.time = time
 
         self.manager = UIManager()
@@ -463,6 +535,8 @@ class EndView(arcade.View):
         self.anchor_layout = UIAnchorLayout()  # Центрирует виджеты
         self.box_layout = UIBoxLayout(vertical=True, space_between=10)  # Вертикальный стек
 
+        score_label = UILabel(text=top_scores_string, multiline=True)
+        self.box_layout.add(score_label)
         flat_button = UIFlatButton(text="Начать заново", width=400, height=50, style=BUTTON_STYLE)
         flat_button.on_click = self.restart  # Не только лямбду, конечно
         self.box_layout.add(flat_button)
@@ -470,8 +544,11 @@ class EndView(arcade.View):
         flat_button.on_click = self.main_menu  # Не только лямбду, конечно
         self.box_layout.add(flat_button)
 
+
         self.anchor_layout.add(self.box_layout, align_y=-200)  # Box в anchor
         self.manager.add(self.anchor_layout)  # Всё в manager
+
+
 
     def on_draw(self) -> bool | None:
         self.clear()
@@ -483,26 +560,26 @@ class EndView(arcade.View):
                                                                        self.trophy_texture.width,
                                                                        self.trophy_texture.height))
         arcade.draw_lbwh_rectangle_filled(SCREEN_WIDTH // 2 - 205,
-                                          SCREEN_HEIGHT // 2 - 100,
+                                          SCREEN_HEIGHT // 2 - 50,
                                           410,
                                           40,
                                           color=arcade.color.WHITE)
         arcade.draw_lbwh_rectangle_filled(SCREEN_WIDTH // 2 - 200,
-                                          SCREEN_HEIGHT // 2 - 95,
+                                          SCREEN_HEIGHT // 2 - 45,
                                           min((400 * GOLD_TIME) / self.time, 400),
                                           30,
                                           color=arcade.color.GREEN)
         arcade.draw_texture_rect(self.gold_cup, arcade.rect.XYWH(SCREEN_WIDTH // 2 + 200,
-                                                                 SCREEN_HEIGHT // 2 - 120,
+                                                                 SCREEN_HEIGHT // 2 - 70,
                                                                  30,
                                                                  30))
         arcade.draw_texture_rect(self.bronze_cup, arcade.rect.XYWH(SCREEN_WIDTH // 2 - 200,
-                                                                   SCREEN_HEIGHT // 2 - 120,
+                                                                   SCREEN_HEIGHT // 2 - 70,
                                                                    30,
                                                                    30))
         arcade.draw_texture_rect(self.silver_cup,
                                  arcade.rect.XYWH(SCREEN_WIDTH // 2 - 200 + (400 * GOLD_TIME // SILVER_TIME),
-                                                  SCREEN_HEIGHT // 2 - 120, 30, 30))
+                                                  SCREEN_HEIGHT // 2 - 70, 30, 30))
         self.manager.draw()
 
     def on_update(self, dt: float) -> bool | None:
@@ -516,6 +593,7 @@ class EndView(arcade.View):
 
     def restart(self, _=None) -> None:
         game_view = GameView(self.menu_view)
+        game_view.name = self.name
         self.window.show_view(game_view)
 
 
